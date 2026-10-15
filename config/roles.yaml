@@ -1,0 +1,69 @@
+# Role matching. Edit this file to tune matches. No code change needed.
+# Titles are normalised before matching: lowercase, punctuation removed,
+# "PMM" expanded to "product marketing manager".
+
+include_titles:
+  - product marketing manager
+  - pmm
+  - product marketing lead
+  - head of product marketing
+  - gtm strategist
+  - gtm manager
+  - go-to-market
+  - gtm lead
+  - growth marketing manager
+  - marketing manager
+  - head of marketing
+  - demand generation manager
+  - gtm engineer
+
+exclude_titles:
+  - intern
+  - director of engineering
+  - software engineer
+  - sales development representative
+  - account executive
+  - recruiter
+
+# Expanded during normalisation.
+abbreviations:
+  pmm: product marketing manager
+  gtm: go to market
+  sdr: sales development representative
+  ae: account executive
+
+# Fuzzy matching, scored 0 to 100.
+fuzzy:
+  match_threshold: 88      # at or above: a match
+  near_miss_floor: 70      # from here up to the threshold: logged as a near miss
+
+# Seniority changes the score and adds a flag. It never filters a role out.
+seniority:
+  senior_terms:
+    - vp
+    - vice president
+    - director
+  senior_label: "senior, check fit"
+  score_modifier:
+    senior: -5
+
+# Roles that point to a marketing or GTM hire coming.
+# Used for first_marketing_role_posted and adjacent_role_opened.
+marketing_terms:
+  - marketing
+  - growth
+  - demand generation
+  - go to market
+  - brand
+  - communications
+
+adjacent_terms:
+  - revenue operations
+  - revops
+  - sales operations
+  - sales
+  - content
+  - designer
+  - design
+  - partnerships
+  - customer success

@@ -1,0 +1,67 @@
+# Engine settings. Secrets are never stored here. They come from the
+# environment (GitHub secrets in CI).
+
+timezone: Asia/Kolkata
+
+# A role is kept for the email only if its location matches one of these.
+# Matching is case insensitive, on whole words.
+# "Remote (no region stated)" means a location that says remote and names
+# no country or region.
+locations_ok:
+  - India
+  - Bengaluru
+  - Bangalore
+  - Remote India
+  - Remote APAC
+  - Remote Worldwide
+  - Remote (no region stated)
+
+# Starting weights. Tune after a few runs.
+signals:
+  weights:
+    matching_role_opened: 10
+    matching_role_closed: 1
+    first_marketing_role_posted: 8
+    adjacent_role_opened: 3
+    careers_page_created: 4
+    open_role_count_jump: 3
+    list_appearance: 2
+    funding_announced: 2
+  decay_half_life_days: 14
+  seed_list_bonus: 1.0          # per extra seed list a company appears on
+  open_role_count_jump_pct: 30  # fire when open roles rise by this much or more
+
+repost:
+  window_days: 30               # same title and location inside this window
+
+# Polite fetching.
+http:
+  user_agent: "JobSignalEngine/0.1 (personal job alert tool; contact: set NOTIFY_TO owner)"
+  min_seconds_between_requests_per_host: 1.0
+  timeout_seconds: 20
+  respect_robots_txt: true
+
+# Seed sources are refreshed weekly, not on every run.
+seed_sources:
+  refresh_days: 7
+  fallback_csv: seed/companies.csv
+  urls:
+    breakout_list: https://breakoutlist.com
+    frontier_list: https://frontierlist.com
+    cosign: https://cosign.co
+    harmonic_hot_25: https://harmonic.ai
+
+# Email. The transport is an adapter. Change "transport" to switch.
+email:
+  transport: gmail_smtp          # gmail_smtp | brevo | resend
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  # Environment variables read at send time:
+  #   SMTP_USER, SMTP_PASSWORD, NOTIFY_TO
+  never_send_empty: true
+  hidden_by_location_line: weekly   # one line a week, not every run
+
+# Shown in the first email so you can fix them by hand.
+housekeeping:
+  list_needs_manual_ats: true
+  list_failed_sources: true
