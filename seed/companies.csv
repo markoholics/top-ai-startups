@@ -1,14 +1,14 @@
 name,domain,tier,source_tags,verified,notes
 Standard Intelligence,,seed,starter_csv,false,from video
-Physical Intelligence,,seed,starter_csv,false,from video
+Physical Intelligence,physicalintelligence.company,seed,starter_csv,false,"from video; domain checked, site links to ashby:physicalintelligence"
 Generalist,,seed,starter_csv,false,from video
-Sunday,,seed,starter_csv,false,from video
-Skild AI,,seed,starter_csv,false,from video
-Dyna Robotics,,seed,starter_csv,false,from video
+Sunday,sunday.ai,seed,starter_csv,false,"from video; domain checked, site links to ashby:sunday"
+Skild AI,skild.ai,seed,starter_csv,false,"from video; domain checked, site loads"
+Dyna Robotics,dyna.co,seed,starter_csv,false,"from video; domain checked, site links to ashby:dyna-robotics"
 Bracket Bot,,seed,starter_csv,false,from video
 The Bot Company,,seed,starter_csv,false,from video
-1X,,seed,starter_csv,false,from video
-Figure,,seed,starter_csv,false,from video
+1X,1x.tech,seed,starter_csv,false,"from video; domain checked, site links to ashby:1x"
+Figure,figure.ai,seed,starter_csv,false,"from video; domain checked, site loads"
 Genesis AI,,seed,starter_csv,false,from video
 Concourse,,seed,starter_csv,false,from video
 Prometheus,,seed,starter_csv,false,from video

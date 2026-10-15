@@ -4,15 +4,15 @@
 -- 1. Starter list (13 companies). Every row starts as verified = false.
 insert into watch_company (name, domain, tier, source_tags, verified) values
   ('Standard Intelligence', null, 'seed', array['starter_csv']::text[], false),
-  ('Physical Intelligence', null, 'seed', array['starter_csv']::text[], false),
+  ('Physical Intelligence', 'physicalintelligence.company', 'seed', array['starter_csv']::text[], false),
   ('Generalist', null, 'seed', array['starter_csv']::text[], false),
-  ('Sunday', null, 'seed', array['starter_csv']::text[], false),
-  ('Skild AI', null, 'seed', array['starter_csv']::text[], false),
-  ('Dyna Robotics', null, 'seed', array['starter_csv']::text[], false),
+  ('Sunday', 'sunday.ai', 'seed', array['starter_csv']::text[], false),
+  ('Skild AI', 'skild.ai', 'seed', array['starter_csv']::text[], false),
+  ('Dyna Robotics', 'dyna.co', 'seed', array['starter_csv']::text[], false),
   ('Bracket Bot', null, 'seed', array['starter_csv']::text[], false),
   ('The Bot Company', null, 'seed', array['starter_csv']::text[], false),
-  ('1X', null, 'seed', array['starter_csv']::text[], false),
-  ('Figure', null, 'seed', array['starter_csv']::text[], false),
+  ('1X', '1x.tech', 'seed', array['starter_csv']::text[], false),
+  ('Figure', 'figure.ai', 'seed', array['starter_csv']::text[], false),
   ('Genesis AI', null, 'seed', array['starter_csv']::text[], false),
   ('Concourse', null, 'seed', array['starter_csv']::text[], false),
   ('Prometheus', null, 'seed', array['starter_csv']::text[], false)
