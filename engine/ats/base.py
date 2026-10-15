@@ -10,6 +10,9 @@ class Job:
     url: str
     updated_at: Optional[str] = None
     company_name: Optional[str] = None   # when the ATS reports it, used to check a guessed slug
+    country: Optional[str] = None        # country or ISO code when the ATS gives one
+    remote: Optional[bool] = None        # True when the ATS flags the role as remote
+    published_at: Optional[str] = None   # when the ATS says it was published
 
 
 class BoardNotFound(Exception):

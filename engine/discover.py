@@ -12,6 +12,10 @@ from .ats import ADAPTERS
 from .ats.base import BoardError, BoardNotFound
 
 
+# Vendors that answered 429 this run. Not retried until the next run.
+RATE_LIMITED = set()
+
+
 def norm(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
@@ -86,12 +90,16 @@ def discover(name, domain=None, adapters=None):
     guess = None
     for slug in slug_candidates(name, domain):
         for ats_name, adapter in adapters.items():
+            if ats_name in RATE_LIMITED:
+                continue
             try:
                 jobs = adapter.fetch_jobs(slug)
             except BoardNotFound:
                 continue
             except BoardError as e:
                 out["errors"].append(str(e))
+                if "HTTP 429" in str(e):
+                    RATE_LIMITED.add(ats_name)      # stop asking for the rest of this run
                 continue
             reported = next((j.company_name for j in jobs if j.company_name), None)
             name_ok = bool(reported) and same_company(name, reported)
