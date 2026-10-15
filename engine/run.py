@@ -35,7 +35,7 @@ def _due(company, now):
     return checked is None or (now - checked) >= dt.timedelta(days=REDISCOVER_DAYS)
 
 
-def _apply_discovery(store, company, result, now):
+def _apply_discovery(store, company, result, now, save=True):
     f = {"ats_checked_at": now}
     if result.get("careers_url"):
         f["careers_url"] = result["careers_url"]
@@ -50,8 +50,9 @@ def _apply_discovery(store, company, result, now):
                          "Not used because nothing proves it belongs to this company.")
         else:
             f["note"] = "; ".join(result.get("notes") or []) or "No job board found."
-    store.update_company(company["id"], f)
-    company.update(f)
+    if save:
+        store.update_company(company["id"], f)
+    company.update(f)                     # a dry run keeps it in memory only, so boards can still be read
 
 
 def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTERS, page_fn=pagewatch.check, dry_run=False):
@@ -62,6 +63,8 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
     RATE_LIMITED.clear()
     companies = store.companies()
     failed, notes, new_events = [], [], 0
+    report = []                                   # one line per company that was looked up this run
+    open_matches, hidden_matches = [], 0          # filled for a dry run, so it shows something useful
 
     # 1. Find boards.
     for c in companies:
@@ -74,8 +77,8 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
             log.warning("Discovery failed for %s: %s", c["name"], e)
             continue
         log.info("  %s", result["confidence"] or "nothing found")
-        if not dry_run:
-            _apply_discovery(store, c, result, now)
+        _apply_discovery(store, c, result, now, save=not dry_run)
+        report.append((c["name"], result))
 
     # 2. Read boards, diff, save.
     ok = 0
@@ -97,6 +100,11 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
         new_events += len(res.events)
         log.info("%s: %d roles, %d new events", c["name"], len(jobs), len(res.events))
         if dry_run:
+            for p in res.postings:
+                if p.get("is_match") and p.get("location_ok"):
+                    open_matches.append((c["name"], p["title"], p.get("location"), p.get("url")))
+                elif p.get("is_match"):
+                    hidden_matches += 1
             for e in res.events:
                 log.info("  would create %s: %s", e["event_type"], e.get("detail"))
             continue
@@ -127,9 +135,14 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
         store.insert_snapshot({"company_id": c["id"], "run_id": run_id, "observed_at": now,
                                "careers_status": status, "careers_hash": h})
 
+    _log_discovery_report(report)
     if dry_run:
+        log.info("OPEN MATCHING ROLES THAT PASS YOUR LOCATION FILTER: %d", len(open_matches))
+        for company, title, loc, url in open_matches:
+            log.info("  %s | %s | %s | %s", company, title, loc, url)
+        log.info("Matching titles hidden by location: %d", hidden_matches)
         log.info("Dry run finished. %d boards read, %d failed, %d events would be created.", ok, len(failed), new_events)
-        return {"emailed": False, "dry_run": True}
+        return {"emailed": False, "dry_run": True, "open_matches": open_matches}
 
     # 4. Email.
     manual = [{"name": c["name"], "tier": c["tier"], "careers_url": c.get("careers_url"), "note": c.get("note")}
@@ -153,6 +166,25 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
     store.finish_run(run_id, ok, len(failed), {"notes": notes, "failed": failed, "new_events": new_events, "emailed": emailed}, now)
     _write_state(now, baseline, ok, len(failed), new_events, emailed)
     return {"emailed": emailed, "baseline": baseline, "ok": ok, "failed": failed, "new_events": new_events}
+
+
+def _log_discovery_report(report):
+    """A plain summary of how each company was looked up, so the log explains the hit rate."""
+    if not report:
+        return
+    groups = {"confirmed": [], "unconfirmed": [], None: []}
+    for name, r in report:
+        groups[r["confidence"]].append((name, r))
+    log.info("JOB BOARD SEARCH SUMMARY: %d companies looked up. %d confirmed, %d unconfirmed, %d nothing found.",
+             len(report), len(groups["confirmed"]), len(groups["unconfirmed"]), len(groups[None]))
+    for name, r in groups["confirmed"]:
+        log.info("  CONFIRMED   %s: %s:%s (%d open roles)", name, r["ats_type"], r["ats_token"], len(r["jobs"] or []))
+    for name, r in groups["unconfirmed"]:
+        said = f", board says '{r['reported_name']}'" if r.get("reported_name") else ""
+        log.info("  UNCONFIRMED %s: possible %s:%s%s", name, r["ats_type"], r["ats_token"], said)
+    for name, r in groups[None]:
+        why = "; ".join(r.get("notes") or []) or "no board found"
+        log.info("  NOTHING     %s: %s", name, why[:160])
 
 
 def _role(p):
@@ -220,9 +252,19 @@ def main(argv):
     dry = "--dry-run" in argv
     to = os.environ.get("NOTIFY_TO", "")
     try:
+        problems = st.check_schema()
+        if problems:
+            for p in problems:
+                log.error("DATABASE NOT READY: %s", p)
+            log.error("Fix: open the Supabase SQL editor, paste the whole of db/003_upgrade.sql, and run it. "
+                      "If the columns show in the table at the bottom but this error stays, open Supabase "
+                      "Project Settings, then API, and click Reload schema.")
+            return 3
         run_once(st, get_mailer(), to, dry_run=dry)
     except StoreError as e:
         log.error("Database error: %s", e)
+        if "schema cache" in str(e) or "column" in str(e):
+            log.error("The database is missing a column. Paste db/001_schema.sql into the Supabase SQL editor and run it, then run this again.")
         return 1
     return 0
 

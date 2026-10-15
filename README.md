@@ -19,7 +19,7 @@ It is deliberately small. Delete it by removing the repo, the Supabase tables an
 6. **The first run** is a baseline. It saves everything silently and emails every open matching role that passes your location filter, plus the companies that need a manual fix.
 
 ## Set up
-1. In Supabase, run `db/001_schema.sql`, then `db/002_seed.sql`, in the SQL editor. Both are safe to run again.
+1. In Supabase, run `db/001_schema.sql`, then `db/002_seed.sql`, in the SQL editor. Both are safe to run again. If you set up an earlier version, also run `db/003_upgrade.sql`. It adds the newer columns and refreshes Supabase. Every run checks the database first and says exactly what is missing.
 2. In the GitHub repo, add these Actions secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_TO`. `SMTP_PASSWORD` is a Google app password.
 3. Actions tab, **Job signals**, **Run workflow**. Tick `dry_run` the first time to see what it finds without saving or emailing.
 4. Run it again without `dry_run`. That is the baseline run. It can take about half an hour because it checks every company politely, one request a second per site.
