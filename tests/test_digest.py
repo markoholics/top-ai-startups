@@ -52,6 +52,12 @@ class Content(unittest.TestCase):
     def test_never_sends_empty(self):
         self.assertIsNone(build_digest([], [], [], fx.MANUAL, fx.FAILED, 5, fx.NOW))     # housekeeping alone is not news
 
+    def test_subject_for_each_kind_of_news(self):
+        d = build_digest([], fx.MOVED, [], [], [], None, fx.NOW)
+        self.assertEqual(d.subject, "Job signals: 2 companies moved (Demo Bots: first marketing role posted)")
+        d = build_digest([], [], fx.CLOSED, [], [], None, fx.NOW)
+        self.assertEqual(d.subject, "Job signals: 1 role closed (Fixture Robotics: Marketing Manager)")
+
     def test_event_ids_are_returned(self):
         self.assertEqual(sorted(full().event_ids), ["e1", "e2", "e3", "e4", "e5", "e6"])
 

@@ -137,11 +137,12 @@ def build_digest(new_roles, moved, closed, manual_ats, failed_sources, hidden_co
     n = len(new_roles)
     if n:
         subject = f"Job signals: {n} new matching role{'s' if n != 1 else ''} ({_top_item(new_roles, moved)})"
-    else:
+    elif moved:
         c = len(moved)
         subject = f"Job signals: {c} compan{'ies' if c != 1 else 'y'} moved ({_top_item([], moved)})"
-        if not moved:
-            subject = f"Job signals: {len(closed)} role{'s' if len(closed) != 1 else ''} closed"
+    else:
+        k = len(closed)
+        subject = f"Job signals: {k} role{'s' if k != 1 else ''} closed ({closed[0]['company']}: {closed[0]['title']})"
     sections = []
     if new_roles:
         ordered = sorted(new_roles, key=lambda x: (-(x.get("company_score") or 0), -x["score"]))
