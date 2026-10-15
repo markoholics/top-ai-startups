@@ -119,7 +119,9 @@ def match_title(title):
 # ---------------------------------------------------------------------------
 # Location
 # ---------------------------------------------------------------------------
-_INDIA = re.compile(r"(?<![a-z])(india|bengaluru|bangalore)(?![a-z])")
+# Every non-remote entry in locations_ok is a place name that passes on its own.
+_PLACES = [re.escape(p.lower()) for p in _cfg["locations_ok"] if not p.lower().startswith("remote")]
+_INDIA = re.compile(r"(?<![a-z])(" + "|".join(_PLACES) + r")(?![a-z])")
 _WORLDWIDE = re.compile(r"(?<![a-z])(worldwide|global|globally|anywhere|world wide)(?![a-z])")
 _APAC = re.compile(r"(?<![a-z])(apac|asia pacific|asia-pacific|asia)(?![a-z])")
 _REMOTE = re.compile(r"(?<![a-z])(remote|remotely|work from home|wfh|telecommute|distributed)(?![a-z])")

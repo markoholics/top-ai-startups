@@ -10,7 +10,7 @@ class TitleTests(unittest.TestCase):
     def test_targets_match(self):
         for t in ["Product Marketing Manager", "Senior PMM", "Growth Marketing Manager",
                   "Head of Marketing", "GTM Manager", "Go-To-Market Strategist",
-                  "Marketing Manager, APAC", "Demand Generation Manager", "GTM Engineer",
+                  "Marketing Manager, APAC", "Demand Generation Manager", "GTM Engineer", "GTM Lead",
                   "Product Marketing Manger"]:          # a typo still matches
             self.assertTrue(match_title(t).is_match, t)
 
@@ -20,7 +20,8 @@ class TitleTests(unittest.TestCase):
             self.assertFalse(match_title(t).is_match, t)
 
     def test_unrelated_titles_do_not_match(self):
-        for t in ["Manufacturing Engineer", "ML Infra Engineer, Data Systems", "Office Manager",
+        for t in ["Data Engineer, GTM", "Commercial Counsel, GTM", "Technical Program Manager, GTM Systems",
+                  "Manufacturing Engineer", "ML Infra Engineer, Data Systems", "Office Manager",
                   "Machine Learning Researcher", "Marketing"]:
             self.assertFalse(match_title(t).is_match, t)
 
@@ -37,8 +38,10 @@ class TitleTests(unittest.TestCase):
         r = match_title("Growth Marketing Lead")
         self.assertFalse(r.is_match)
         self.assertEqual(r.near_miss_reason, "below threshold")
-        r = match_title("Account Executive, GTM")
-        self.assertEqual(r.near_miss_reason, "excluded term: account executive")
+        r = match_title("Marketing Manager Intern")
+        self.assertFalse(r.is_match)
+        self.assertEqual(r.near_miss_reason, "excluded term: intern")
+        self.assertFalse(match_title("Account Executive, GTM").is_match)
         # Plain noise is not logged.
         self.assertIsNone(match_title("Software Engineer").near_miss_reason)
         self.assertIsNone(match_title("Product Manager, Billing").near_miss_reason)
@@ -56,7 +59,8 @@ class LocationTests(unittest.TestCase):
 
     def test_india(self):
         for loc in ["Bengaluru", "Bangalore, KA", "Bengaluru, India", "India", "Mumbai, India",
-                    "San Francisco | Bengaluru", "San Francisco, CA; Bangalore"]:
+                    "San Francisco | Bengaluru", "San Francisco, CA; Bangalore",
+                    "Pune", "Mumbai, Maharashtra", "New Delhi", "Hyderabad, Telangana", "Gurugram", "Chennai"]:
             self.assertTrue(self.ok(loc), loc)
 
     def test_remote_regions(self):
