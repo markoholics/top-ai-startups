@@ -7,7 +7,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import fixtures as fx  # noqa: E402
 from engine.delivery import deliver  # noqa: E402
-from engine.digest import ago, build_baseline, build_digest, ist  # noqa: E402
+from engine.digest import ago, build_baseline, build_digest, build_quiet, ist  # noqa: E402
 from engine.mail.gmail_smtp import GmailSMTP, MailError  # noqa: E402
 
 
@@ -84,6 +84,30 @@ class Content(unittest.TestCase):
         self.assertEqual(ago(fx.NOW, fx.NOW), "1 minute ago")
         self.assertEqual(ago(fx.hours(72), fx.NOW), "3 days ago")
         self.assertEqual(ist(fx.NOW), "15 Oct 2026, 18:30 IST")
+
+
+class Quiet(unittest.TestCase):
+    def test_quiet_email_lists_whats_still_open(self):
+        d = build_quiet(fx.NEW_ROLES[:2], 52, ["Could not read 1 job board this run: BharatX."], 3, fx.NOW)
+        self.assertEqual(d.subject, "Job signals: nothing new today (2 matching roles still open)")
+        self.assertIn("STILL OPEN AND MATCHING", d.text)
+        self.assertIn("Fixture Robotics: Product Marketing Manager", d.text)
+        self.assertIn("52 companies still need a manual ATS fix", d.text)
+        self.assertIn("3 matching titles hidden by location.", d.text)
+        self.assertEqual(d.event_ids, [])
+        self.assertEqual(d.kind, "quiet")
+
+    def test_quiet_email_with_nothing_open(self):
+        d = build_quiet([], 0, [], None, fx.NOW)
+        self.assertEqual(d.subject, "Job signals: nothing new today (no matching roles open)")
+        self.assertIn("None is open right now", d.text)
+
+    def test_quiet_email_follows_the_copy_rules(self):
+        for d in (build_quiet(fx.NEW_ROLES, 5, ["x"], 1, fx.NOW), build_quiet([], 0, [], None, fx.NOW)):
+            for body in (d.subject, d.text, d.html):
+                self.assertNotIn("\u2014", body)
+                self.assertNotIn("\u2013", body)
+                self.assertNotRegex(body, r"\s-\s")
 
 
 class CopyRules(unittest.TestCase):

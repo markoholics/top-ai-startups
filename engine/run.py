@@ -20,7 +20,8 @@ from .ats import ADAPTERS
 from .ats.base import BoardError, BoardNotFound
 from .config import ROOT
 from .delivery import deliver
-from .digest import IST, build_baseline, build_digest
+from .config import load
+from .digest import IST, build_baseline, build_digest, build_quiet
 from .discover import RATE_LIMITED, discover
 from .events import diff_company, page_events, score_company
 
@@ -55,8 +56,11 @@ def _apply_discovery(store, company, result, now, save=True):
     company.update(f)                     # a dry run keeps it in memory only, so boards can still be read
 
 
-def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTERS, page_fn=pagewatch.check, dry_run=False):
+def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTERS, page_fn=pagewatch.check, dry_run=False,
+             quiet_status=None):
     now = now or dt.datetime.now(dt.timezone.utc)
+    if quiet_status is None:
+        quiet_status = bool(load("config.yaml")["email"].get("daily_status_when_quiet", False))
     baseline = not store.baseline_delivered()
     run_id = "" if dry_run else store.start_run("baseline" if baseline else "normal", now)
     log.info("Run started. Kind: %s%s", "baseline" if baseline else "normal", " (dry run)" if dry_run else "")
@@ -157,6 +161,9 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
         digest = build_baseline([_role(r) for r in roles], manual, failed_lines, hidden, now)
     else:
         digest = _normal_digest(store, manual, failed_lines, hidden, now)
+        if digest is None and quiet_status:
+            roles = [_role(r) for r in store.open_matches()]
+            digest = build_quiet(roles, len(manual), failed_lines, hidden, now)
     emailed = False
     if digest is None:
         log.info("Nothing new. No email sent.")

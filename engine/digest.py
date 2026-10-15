@@ -181,3 +181,29 @@ def build_baseline(open_roles, manual_ats, failed_sources, hidden_count, now) ->
     sections += _housekeeping(manual_ats, failed_sources, hidden_count)
     text, html = _render("Job Signal Engine: baseline complete", intro, sections, now)
     return Digest("Job Signal Engine: baseline complete", text, html, [], "baseline")
+
+
+def build_quiet(open_roles, manual_count, failed_lines, hidden_count, now) -> Digest:
+    """A short status email for a day with nothing new. Not an empty email: it says what is
+    still open. It carries no events, so it never marks anything as sent."""
+    n = len(open_roles)
+    if n:
+        subject = f"Job signals: nothing new today ({n} matching role{'s' if n != 1 else ''} still open)"
+        intro = "No new matching roles since the last run. These are still open and pass your location filter."
+    else:
+        subject = "Job signals: nothing new today (no matching roles open)"
+        intro = "No new matching roles since the last run. None is open right now that passes your location filter."
+    sections = []
+    if open_roles:
+        ordered = sorted(open_roles, key=lambda x: (-(x.get("company_score") or 0), -x["score"]))
+        sections.append(("Still open and matching", [_role_lines(r, now, show_first_seen=False) for r in ordered]))
+    notes = []
+    if manual_count:
+        notes.append(f"{manual_count} companies still need a manual ATS fix. Run select * from v_needs_manual_ats in Supabase.")
+    notes += list(failed_lines)
+    if hidden_count is not None:
+        notes.append(f"{hidden_count} matching titles hidden by location.")
+    if notes:
+        sections.append(("Housekeeping", notes))
+    text, html = _render("Job signals", f"{intro} Run time: {ist(now)}", sections, now)
+    return Digest(subject, text, html, [], "quiet")

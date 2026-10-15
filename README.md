@@ -1,7 +1,7 @@
 # Job Signal Engine
 
 Watches a list of AI startups and emails you when one opens a role you would apply to.
-It runs twice a day. The point is speed: you see a matching role within hours of it going live.
+It runs by itself every day at 09:00 IST. The point is speed: you see a matching role on the next morning's run.
 
 It is deliberately small. Delete it by removing the repo, the Supabase tables and the Vercel project.
 
@@ -23,7 +23,9 @@ It is deliberately small. Delete it by removing the repo, the Supabase tables an
 2. In the GitHub repo, add these Actions secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_TO`. `SMTP_PASSWORD` is a Google app password.
 3. Actions tab, **Job signals**, **Run workflow**. Tick `dry_run` the first time to see what it finds without saving or emailing.
 4. Run it again without `dry_run`. That is the baseline run. It can take about half an hour because it checks every company politely, one request a second per site.
-5. After that it runs by itself at 06:30 and 18:30 IST.
+5. After that it runs by itself every day at 09:00 IST. You never need to press Run again.
+
+On a day with nothing new you get a short status email saying so, and listing the matching roles that are still open. To stay silent on quiet days instead, set `daily_status_when_quiet: false` in `config/config.yaml`. To change the time, edit the `cron` line in `.github/workflows/run.yml`. It is in UTC, so 09:00 IST is `30 3 * * *`.
 
 Send a test email with fake data: Actions tab, **Send test email**.
 
@@ -42,7 +44,7 @@ where name = 'Company Name';
 `ats_type` is one of `greenhouse`, `lever`, `ashby`, `workable`, `recruitee`. The token is the last part of the board link.
 
 ## Two limits of GitHub Actions
-- **Cron can run late.** GitHub may start a scheduled run several minutes after the set time, and later when GitHub is busy. A run set for 06:30 IST may start at 06:45.
+- **Cron can run late.** GitHub may start a scheduled run several minutes after the set time, and later when GitHub is busy. A run set for 09:00 IST may start at 09:15.
 - **Scheduled workflows are switched off after 60 days without a commit.** Each run commits `state/last_run.json`, so the repo stays active. If the emails ever stop, press **Run workflow** once and check that the schedule is still listed.
 
 ## Other known limits

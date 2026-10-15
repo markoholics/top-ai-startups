@@ -69,6 +69,9 @@ email:
   # Environment variables read at send time:
   #   SMTP_USER, SMTP_PASSWORD, NOTIFY_TO
   never_send_empty: true
+  # On a day with nothing new, still send a short status email so you know the engine ran
+  # and which matching roles are still open. Set to false to stay silent on quiet days.
+  daily_status_when_quiet: true
   hidden_by_location_line: weekly   # one line a week, not every run
 
 # Shown in the first email so you can fix them by hand.
