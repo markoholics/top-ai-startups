@@ -22,7 +22,8 @@ create table if not exists watch_company (
   created_at       timestamptz not null default now(),
   -- Support columns. Small, and needed by discovery and the page fallback.
   careers_url      text,
-  ats_checked_at   timestamptz
+  ats_checked_at   timestamptz,
+  note             text
 );
 
 -- One row per company name, ignoring case and spacing.
@@ -299,6 +300,7 @@ alter view v_digest_history     set (security_invoker = on);
 -- ---------------------------------------------------------------------------
 -- Upgrades for installs made before step 6. Safe to run on a fresh install too.
 -- ---------------------------------------------------------------------------
+alter table watch_company add column if not exists note text;
 alter table job_posting add column if not exists role_kind text;
 alter table job_posting drop constraint if exists job_posting_role_kind_check;
 alter table job_posting add constraint job_posting_role_kind_check

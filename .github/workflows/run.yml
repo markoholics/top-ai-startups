@@ -1,0 +1,50 @@
+name: Job signals
+# Runs at 06:30 and 18:30 IST. GitHub cron uses UTC, so 01:00 and 13:00 UTC.
+# Press "Run workflow" to run by hand. Tick dry_run to read the boards without
+# saving anything or sending an email.
+on:
+  schedule:
+    - cron: "0 1,13 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Read and report only. No saving, no email."
+        type: boolean
+        default: false
+
+concurrency:
+  group: job-signals
+  cancel-in-progress: false
+
+permissions:
+  contents: write        # to commit state/last_run.json
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run the engine
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+        run: python3 -m engine.run ${{ inputs.dry_run && '--dry-run' || '' }}
+      - name: Commit the state file
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "job-signals-bot"
+          git config user.email "job-signals-bot@users.noreply.github.com"
+          git add state/last_run.json
+          if ! git diff --cached --quiet; then
+            git commit -m "state: last run"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
