@@ -187,7 +187,9 @@ class EndToEnd(unittest.TestCase):
         r = self.h.run(0, dry=True)
         self.assertTrue(r["dry_run"])
         self.assertEqual((self.h.store.posts, self.h.store.events, self.h.store.digests, self.h.mailer.sent), ([], [], [], []))
-        self.assertTrue(all(c["ats_type"] is None for c in self.h.store.companies()))
+        self.assertTrue(all(c["ats_type"] is None for c in self.h.store.companies()))     # nothing saved
+        # But it still reads the boards it found and reports what it sees.
+        self.assertEqual([(m[0], m[1]) for m in r["open_matches"]], [("Fixture Co", "Product Marketing Manager")])
 
     def test_state_file_is_written(self):
         self.baseline()

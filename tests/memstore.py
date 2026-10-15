@@ -21,7 +21,8 @@ class MemoryStore:
 
     # companies
     def companies(self):
-        return sorted(self.co.values(), key=lambda c: c["name"])
+        # Copies, like the real database returns. A dry run changes them in memory only.
+        return [dict(c) for c in sorted(self.co.values(), key=lambda c: c["name"])]
 
     def update_company(self, cid, fields):
         self.co[cid].update(fields)
