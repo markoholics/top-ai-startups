@@ -1,10 +1,10 @@
 name: Job signals
-# Runs at 06:30 and 18:30 IST. GitHub cron uses UTC, so 01:00 and 13:00 UTC.
+# Runs every day at 09:00 IST. GitHub cron uses UTC, and IST is UTC plus 5:30, so 03:30 UTC.
 # Press "Run workflow" to run by hand. Tick dry_run to read the boards without
 # saving anything or sending an email.
 on:
   schedule:
-    - cron: "0 1,13 * * *"
+    - cron: "30 3 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

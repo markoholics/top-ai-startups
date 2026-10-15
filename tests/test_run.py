@@ -68,9 +68,10 @@ class Harness:
         return {"ats_type": None, "ats_token": None, "confidence": None, "jobs": None, "careers_url": None,
                 "notes": ["no ATS link in the page text"], "errors": []}
 
-    def run(self, hours, mailer=None, dry=False):
+    def run(self, hours, mailer=None, dry=False, quiet=False):
         return runmod.run_once(self.store, mailer or self.mailer, "me@example.com", now=at(hours), discover_fn=self.discover,
-                               adapters={"ashby": self.ats}, page_fn=lambda url: (200, "h"), dry_run=dry)
+                               adapters={"ashby": self.ats}, page_fn=lambda url: (200, "h"), dry_run=dry,
+                               quiet_status=quiet)
 
 
 class EndToEnd(unittest.TestCase):
@@ -108,6 +109,33 @@ class EndToEnd(unittest.TestCase):
         r = self.h.run(12)
         self.assertFalse(r["emailed"])
         self.assertEqual(len(self.h.mailer.sent), 1)
+
+    def test_quiet_day_sends_a_short_status_email_when_switched_on(self):
+        self.baseline()
+        r = self.h.run(12, quiet=True)
+        self.assertTrue(r["emailed"])
+        mail = self.h.mailer.sent[-1]
+        self.assertEqual(mail["subject"], "Job signals: nothing new today (1 matching role still open)")
+        self.assertIn("Fixture Co: Product Marketing Manager", mail["text"])
+        self.assertNotIn("Software Engineer", mail["text"])
+        self.assertIn("Unresolvable Co", "".join(c["name"] for c in self.h.store.companies()))
+        # It carries no events, so a later real event is unaffected.
+        self.assertEqual(self.h.store.digests[-1]["event_ids"], [])
+        self.h.ats.boards["fx"] = BASE + [job(5, "Head of Marketing", "Bengaluru")]
+        r = self.h.run(24, quiet=True)
+        self.assertIn("1 new matching role", self.h.mailer.sent[-1]["subject"])      # real news wins over the status email
+
+    def test_quiet_day_stays_silent_when_switched_off(self):
+        self.baseline()
+        self.assertFalse(self.h.run(12, quiet=False)["emailed"])
+        self.assertEqual(len(self.h.mailer.sent), 1)
+
+    def test_quiet_status_email_failure_is_retried_not_lost(self):
+        self.baseline()
+        with self.assertLogs("jobsignals", level="ERROR"):
+            r = self.h.run(12, mailer=Mailer(fail=True), quiet=True)
+        self.assertFalse(r["emailed"])
+        self.assertEqual(self.h.store.unsent_events(), [])                           # nothing to lose, nothing stuck
 
     def test_new_matching_role_is_emailed_once(self):
         self.baseline()
