@@ -275,3 +275,21 @@ create or replace view v_digest_history as
 select sent_at, subject, delivered, cardinality(event_ids) as events, error
 from digest_log
 order by sent_at desc;
+
+-- ---------------------------------------------------------------------------
+-- Lock the views down. By default a view runs with its owner's rights and
+-- would let the public anon key read the data over the REST API.
+-- security_invoker makes the views obey RLS, so only the service role reads.
+-- ---------------------------------------------------------------------------
+alter view v_unsent_events      set (security_invoker = on);
+alter view v_open_matches       set (security_invoker = on);
+alter view v_hidden_by_location set (security_invoker = on);
+alter view v_company_scores     set (security_invoker = on);
+alter view v_recent_events      set (security_invoker = on);
+alter view v_closed_roles       set (security_invoker = on);
+alter view v_needs_manual_ats   set (security_invoker = on);
+alter view v_coverage           set (security_invoker = on);
+alter view v_coverage_by_ats    set (security_invoker = on);
+alter view v_near_misses        set (security_invoker = on);
+alter view v_run_history        set (security_invoker = on);
+alter view v_digest_history     set (security_invoker = on);

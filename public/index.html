@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Signals</title>
+<style>
+  :root {
+    --bg: #f6f6f3; --panel: #ffffff; --ink: #1c1c1a; --muted: #6b6b66;
+    --line: #e4e4de; --accent: #1f5f4a; --accent-ink: #ffffff;
+    --warn: #8a5a00; --warn-bg: #fff4d6; --ok-bg: #e3f2ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --panel: #1d1d1b; --ink: #ecece6; --muted: #9a9a92;
+      --line: #2f2f2b; --accent: #6fcf9f; --accent-ink: #0c1a14;
+      --warn: #f0c36a; --warn-bg: #3a2f12; --ok-bg: #16301f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .banner { background: var(--warn-bg); color: var(--warn); padding: 10px 14px;
+    border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+  .error { background: #fde8e8; color: #8a1c1c; padding: 10px 14px; border-radius: 8px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin-bottom: 20px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 26px; line-height: 1.1; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  nav button { background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .empty { padding: 20px; color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    background: var(--ok-bg); margin: 0 4px 2px 0; white-space: nowrap; }
+  .tag.flag { background: var(--warn-bg); color: var(--warn); }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  button.refresh { margin-left: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Job Signals</h1>
+  <div class="sub"><span id="stamp">Loading</span> <button id="refresh" class="refresh" type="button">Refresh</button></div>
+  <div id="banner"></div>
+  <div class="stats" id="stats"></div>
+  <nav id="tabs" role="tablist"></nav>
+  <div class="panel" id="panel"></div>
+</main>
+<script>
+const IST = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
+
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v; else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) e.append(kid instanceof Node ? kid : document.createTextNode(kid ?? ''));
+  return e;
+}
+const ago = (iso) => {
+  if (!iso) return '';
+  const h = (Date.now() - new Date(iso)) / 36e5;
+  if (h < 1) return Math.max(1, Math.round(h * 60)) + ' minutes ago';
+  if (h < 48) return Math.round(h) + ' hours ago';
+  return Math.round(h / 24) + ' days ago';
+};
+const ist = (iso) => (iso ? IST.format(new Date(iso)) + ' IST' : '');
+const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : null);
+const link = (u, text) => { const s = safeUrl(u); return s ? el('a', { href: s, target: '_blank', rel: 'noopener noreferrer' }, text) : text; };
+const tags = (arr) => el('span', {}, (arr || []).map((t) => el('span', { class: 'tag' }, t)));
+
+const TABS = [
+  { id: 'open', label: 'Open matches', key: 'openMatches',
+    cols: ['Company', 'Title', 'Location', 'ATS', 'First seen', 'Score', 'Lists', 'Apply'],
+    row: (r) => [
+      el('span', {}, r.company, ' ', el('span', { class: 'tag' }, r.tier)),
+      el('span', {}, r.title, ' ',
+        r.seniority_flag ? el('span', { class: 'tag flag' }, 'senior, check fit') : '',
+        r.likely_repost ? el('span', { class: 'tag flag' }, 'likely repost') : ''),
+      r.location, r.ats_type,
+      el('span', {}, ago(r.first_seen_at), el('br'), el('span', { class: 'muted' }, ist(r.first_seen_at))),
+      r.score, tags(r.source_tags), link(r.apply_url, 'Apply')] },
+  { id: 'events', label: 'Recent events', key: 'events',
+    cols: ['When', 'Company', 'Signal', 'Weight', 'Detail', 'Sent'],
+    row: (r) => [el('span', {}, ago(r.observed_at), el('br'), el('span', { class: 'muted' }, ist(r.observed_at))),
+      el('span', {}, r.company, ' ', el('span', { class: 'tag' }, r.tier)),
+      r.event_type, r.weight, link(r.evidence_url, r.detail || 'Evidence'), r.unsent ? 'Waiting' : 'Sent'] },
+  { id: 'scores', label: 'Company scores', key: 'scores',
+    cols: ['Company', 'Score', 'Events', 'Last event', 'Lists'],
+    row: (r) => [el('span', {}, r.company, ' ', el('span', { class: 'tag' }, r.tier)),
+      r.score, r.events, ago(r.last_event_at), tags(r.source_tags)] },
+  { id: 'closed', label: 'Closed roles', key: 'closed',
+    cols: ['Company', 'Title', 'Location', 'Closed'],
+    row: (r) => [r.company, r.title, r.location, ago(r.closed_at)] },
+  { id: 'hidden', label: 'Hidden by location', key: 'hidden',
+    cols: ['Company', 'Title', 'Location', 'First seen'],
+    row: (r) => [el('span', {}, r.company, ' ', el('span', { class: 'tag' }, r.tier)), link(r.url, r.title), r.location, ago(r.first_seen_at)] },
+  { id: 'manual', label: 'Needs manual ATS', key: 'manual',
+    cols: ['Company', 'Tier', 'Domain', 'Careers page'],
+    row: (r) => [r.name, r.tier, r.domain, link(r.careers_url, r.careers_url || '')] },
+  { id: 'near', label: 'Near misses', key: 'nearMisses',
+    cols: ['Company', 'Title', 'Closest include', 'Score', 'Reason'],
+    row: (r) => [r.company, r.title, r.best_match, r.score, r.reason] },
+  { id: 'runs', label: 'Runs and digests', key: 'runs',
+    cols: ['Started', 'Kind', 'OK', 'Failed'],
+    row: (r) => [ist(r.started_at), r.kind, r.companies_ok, r.companies_failed] },
+];
+
+let data = null;
+let current = 'open';
+
+function renderStats() {
+  const cov = data.coverage || [];
+  const sum = (k) => cov.reduce((a, r) => a + Number(r[k] || 0), 0);
+  const items = [
+    [(data.openMatches || []).length, 'Open matching roles'],
+    [(data.hidden || []).length, 'Hidden by location'],
+    [`${sum('resolved_to_ats')} of ${sum('companies')}`, 'Companies on an ATS'],
+    [sum('needs_manual'), 'Need a manual fix'],
+    [(data.events || []).filter((e) => e.unsent).length, 'Events waiting to send'],
+  ];
+  document.getElementById('stats').replaceChildren(
+    ...items.map(([n, label]) => el('div', { class: 'stat' }, el('b', {}, String(n)), el('span', {}, label))));
+}
+
+function renderTabs() {
+  const nav = document.getElementById('tabs');
+  nav.replaceChildren(...TABS.map((t) => {
+    const n = (data[t.key] || []).length;
+    const b = el('button', { type: 'button', role: 'tab', 'aria-selected': String(t.id === current) }, `${t.label} (${n})`);
+    b.addEventListener('click', () => { current = t.id; renderTabs(); renderPanel(); });
+    return b;
+  }));
+}
+
+function renderPanel() {
+  const t = TABS.find((x) => x.id === current);
+  const rows = data[t.key] || [];
+  const panel = document.getElementById('panel');
+  if (!rows.length) { panel.replaceChildren(el('div', { class: 'empty' }, 'Nothing here yet.')); return; }
+  const table = el('table', {},
+    el('thead', {}, el('tr', {}, t.cols.map((c) => el('th', {}, c)))),
+    el('tbody', {}, rows.map((r) => el('tr', {}, t.row(r).map((c) => el('td', {}, c))))));
+  panel.replaceChildren(table);
+}
+
+async function load() {
+  const stamp = document.getElementById('stamp');
+  const banner = document.getElementById('banner');
+  stamp.textContent = 'Loading';
+  try {
+    const r = await fetch('/api/data', { cache: 'no-store', credentials: 'same-origin' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    data = body;
+    banner.replaceChildren(data.demo
+      ? el('div', { class: 'banner' }, 'Sample data. Set SUPABASE_URL, SUPABASE_SERVICE_KEY and DASHBOARD_PASSWORD in Vercel to show live data.')
+      : '');
+    stamp.textContent = `Updated ${ist(data.generatedAt)}`;
+    renderStats(); renderTabs(); renderPanel();
+  } catch (e) {
+    stamp.textContent = '';
+    banner.replaceChildren(el('div', { class: 'error' }, `Could not load data. ${e.message}`));
+  }
+}
+document.getElementById('refresh').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>
