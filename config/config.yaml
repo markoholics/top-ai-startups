@@ -65,3 +65,9 @@ email:
 housekeeping:
   list_needs_manual_ats: true
   list_failed_sources: true
+
+# Not startups, so never watched. They appeared on a list but are not the target.
+excluded_companies:
+  - Tesla
+  - Amazon
+  - OpenAI Robotics
