@@ -9,13 +9,20 @@ include_titles:
   - head of product marketing
   - gtm strategist
   - gtm manager
-  - go-to-market
   - gtm lead
   - growth marketing manager
   - marketing manager
   - head of marketing
   - demand generation manager
   - gtm engineer
+  # Close variants added so VP and Director roles show up flagged "senior, check fit".
+  # Delete these lines if you do not want them.
+  - vp marketing
+  - vp of marketing
+  - vice president of marketing
+  - director of marketing
+  - director of product marketing
+  - director of growth marketing
 
 exclude_titles:
   - intern

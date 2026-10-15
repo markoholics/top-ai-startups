@@ -49,6 +49,7 @@ create table if not exists job_posting (
   normalised_title  text,
   seniority_flag    text check (seniority_flag in ('senior')),
   likely_repost     boolean not null default false,
+  role_kind         text check (role_kind in ('match', 'marketing', 'adjacent')),
   constraint job_posting_dedupe unique (company_id, ats_job_id)
 );
 
@@ -68,7 +69,8 @@ create table if not exists job_event (
                  ('matching_role_opened', 'matching_role_closed',
                   'first_marketing_role_posted', 'adjacent_role_opened',
                   'careers_page_created', 'open_role_count_jump',
-                  'list_appearance', 'funding_announced')),
+                  'list_appearance', 'funding_announced',
+                  'careers_page_changed')),
   weight       numeric(6, 2) not null,
   evidence_url text,
   observed_at  timestamptz not null default now(),
@@ -293,3 +295,18 @@ alter view v_coverage_by_ats    set (security_invoker = on);
 alter view v_near_misses        set (security_invoker = on);
 alter view v_run_history        set (security_invoker = on);
 alter view v_digest_history     set (security_invoker = on);
+
+-- ---------------------------------------------------------------------------
+-- Upgrades for installs made before step 6. Safe to run on a fresh install too.
+-- ---------------------------------------------------------------------------
+alter table job_posting add column if not exists role_kind text;
+alter table job_posting drop constraint if exists job_posting_role_kind_check;
+alter table job_posting add constraint job_posting_role_kind_check
+  check (role_kind in ('match', 'marketing', 'adjacent'));
+
+alter table job_event drop constraint if exists job_event_event_type_check;
+alter table job_event add constraint job_event_event_type_check
+  check (event_type in
+    ('matching_role_opened', 'matching_role_closed', 'first_marketing_role_posted',
+     'adjacent_role_opened', 'careers_page_created', 'open_role_count_jump',
+     'list_appearance', 'funding_announced', 'careers_page_changed'));

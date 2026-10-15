@@ -11,6 +11,13 @@ locations_ok:
   - India
   - Bengaluru
   - Bangalore
+  - Mumbai
+  - Delhi
+  - Hyderabad
+  - Pune
+  - Chennai
+  - Gurugram
+  - Gurgaon
   - Remote India
   - Remote APAC
   - Remote Worldwide
@@ -27,9 +34,12 @@ signals:
     open_role_count_jump: 3
     list_appearance: 2
     funding_announced: 2
+    careers_page_changed: 1      # weak: a changed page with no ATS access
   decay_half_life_days: 14
   seed_list_bonus: 1.0          # per extra seed list a company appears on
   open_role_count_jump_pct: 30  # fire when open roles rise by this much or more
+  open_role_count_jump_min_increase: 3   # and by at least this many roles, so 1 to 2 does not count
+  empty_fetch_guard_min_open: 3 # a board that suddenly shows 0 roles, when we knew of this many, is treated as a failed read
 
 repost:
   window_days: 30               # same title and location inside this window
