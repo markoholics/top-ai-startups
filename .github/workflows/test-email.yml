@@ -1,0 +1,32 @@
+name: Send test email
+# Sends the fixture digest (fake data) to NOTIFY_TO. Run it by hand from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      style:
+        description: "normal or baseline"
+        default: "normal"
+        type: choice
+        options: [normal, baseline]
+permissions:
+  contents: read
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Send the test email
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+        run: |
+          if [ "${{ inputs.style }}" = "baseline" ]; then
+            python3 -I scripts/send_test_digest.py --baseline
+          else
+            python3 -I scripts/send_test_digest.py
+          fi
