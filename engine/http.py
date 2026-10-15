@@ -57,6 +57,9 @@ def _allowed(url):
     host = parts.netloc
     if host not in _robots:
         r = _raw_get(f"{parts.scheme}://{host}/robots.txt", "text/plain")
+        if r.status == 0 or r.status >= 500:      # one retry, a blip is not a refusal
+            time.sleep(2)
+            r = _raw_get(f"{parts.scheme}://{host}/robots.txt", "text/plain")
         if r.status == 200:
             rp = urllib.robotparser.RobotFileParser()
             rp.parse(r.text().splitlines())
@@ -77,7 +80,7 @@ def get(url, api=False, accept="*/*", retries=1):
     if RESPECT_ROBOTS and not api and not _allowed(url):
         return Response(-1, b"blocked by robots.txt", url)
     r = _raw_get(url, accept)
-    if r.status in (429, 500, 502, 503, 504) and retries > 0:
+    if r.status in (0, 429, 500, 502, 503, 504) and retries > 0:
         time.sleep(3)
         return get(url, api, accept, retries - 1)
     return r

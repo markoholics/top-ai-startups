@@ -92,6 +92,8 @@ def discover(name, domain=None, adapters=None):
         for ats_name, adapter in adapters.items():
             if ats_name in RATE_LIMITED:
                 continue
+            if ats_name in ("recruitee", "workable") and not re.fullmatch(r"[a-z0-9-]+", slug):
+                continue                      # these tokens are DNS labels or URL parts
             try:
                 jobs = adapter.fetch_jobs(slug)
             except BoardNotFound:
@@ -109,7 +111,10 @@ def discover(name, domain=None, adapters=None):
                    "jobs": jobs, "reported_name": reported, "name_looks_right": name_ok}
             # Second proof: the board's own job descriptions name the company's website.
             check = getattr(adapter, "mentions_domain", None)
-            if name_ok and domain and check and check(slug, domain):
+            # Some ATSs (Ashby, Lever) never report a company name. Then the website
+            # check is the only proof available, so run it. A reported name that
+            # does not match (Team Rubicon) is a firm no.
+            if domain and check and (name_ok or reported is None) and check(slug, domain):
                 hit["confidence"] = "confirmed"
                 out["notes"].append(f"confirmed because job descriptions mention {domain}")
                 out.update(hit)
