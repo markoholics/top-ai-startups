@@ -252,6 +252,14 @@ def main(argv):
     dry = "--dry-run" in argv
     to = os.environ.get("NOTIFY_TO", "")
     try:
+        problems = st.check_schema()
+        if problems:
+            for p in problems:
+                log.error("DATABASE NOT READY: %s", p)
+            log.error("Fix: open the Supabase SQL editor, paste the whole of db/003_upgrade.sql, and run it. "
+                      "If the columns show in the table at the bottom but this error stays, open Supabase "
+                      "Project Settings, then API, and click Reload schema.")
+            return 3
         run_once(st, get_mailer(), to, dry_run=dry)
     except StoreError as e:
         log.error("Database error: %s", e)

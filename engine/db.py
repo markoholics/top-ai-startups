@@ -99,6 +99,42 @@ class SupabaseStore:
     def _in(self, values):
         return "in.(" + ",".join(str(v) for v in values) + ")"
 
+    # -- schema check -------------------------------------------------------
+    REQUIRED = {
+        "watch_company": ["id", "name", "domain", "tier", "source_tags", "ats_type", "ats_token", "verified",
+                          "needs_manual_ats", "careers_url", "ats_checked_at", "note"],
+        "job_posting": ["company_id", "ats_job_id", "title", "location", "url", "first_seen_at", "last_seen_at", "closed_at",
+                        "title_match_score", "location_ok", "is_match", "normalised_title", "seniority_flag",
+                        "likely_repost", "role_kind"],
+        "job_event": ["company_id", "posting_id", "event_type", "weight", "evidence_url", "observed_at", "dedupe_key", "detail"],
+        "digest_log": ["event_ids", "subject", "delivered", "error"],
+        "engine_run": ["kind", "started_at", "finished_at", "companies_ok", "companies_failed", "notes"],
+        "company_snapshot": ["company_id", "run_id", "observed_at", "open_role_count", "careers_hash", "careers_status"],
+        "title_near_miss": ["company_id", "posting_id", "title", "best_match", "score", "reason", "observed_at"],
+    }
+
+    def check_schema(self):
+        """Return a list of plain problems, empty when every table and column the engine needs is there.
+        Reads one row at most from each table, so it is cheap."""
+        problems = []
+        for table, cols in self.REQUIRED.items():
+            try:
+                self._call("GET", table, {"select": ",".join(cols), "limit": 1})
+            except StoreError as e:
+                text = str(e)
+                if "PGRST205" in text or "does not exist" in text and "relation" in text:
+                    problems.append(f"table {table} is missing")
+                    continue
+                # One column at a time, to name the ones that are missing.
+                missing = []
+                for c in cols:
+                    try:
+                        self._call("GET", table, {"select": c, "limit": 1})
+                    except StoreError:
+                        missing.append(c)
+                problems.append(f"{table} is missing: {', '.join(missing) if missing else 'a column (' + text[:120] + ')'}")
+        return problems
+
     # -- companies ----------------------------------------------------------
     def companies(self):
         rows = self.select("watch_company", {"order": "name"})
