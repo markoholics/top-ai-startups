@@ -48,7 +48,17 @@ class MemoryStore:
         return {p["ats_job_id"]: p["id"] for p in self.posts if p["company_id"] == cid}
 
     # events
+    # The real job_event table has exactly these columns. A write with any other key is rejected,
+    # the way PostgREST rejects it (PGRST204).
+    EVENT_COLUMNS = {"id", "company_id", "posting_id", "event_type", "weight", "evidence_url", "observed_at",
+                     "dedupe_key", "detail"}
+
     def insert_events(self, rows):
+        from engine.db import StoreError
+        for r in rows:
+            extra = set(r) - self.EVENT_COLUMNS
+            if extra:
+                raise StoreError(f"POST job_event: HTTP 400 PGRST204 Could not find the '{sorted(extra)[0]}' column of 'job_event'")
         have = {e["dedupe_key"] for e in self.events}
         for r in rows:
             if r["dedupe_key"] not in have:

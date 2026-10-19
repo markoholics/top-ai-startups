@@ -118,26 +118,29 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
         if closed:
             store.close_postings(c["id"], closed, now)
         ids = store.posting_ids(c["id"])
-        store.insert_events([dict({k: v for k, v in e.items() if k != "ats_job_id"}, posting_id=ids.get(e.get("ats_job_id")))
-                             for e in res.events])
+        store.insert_events([_event_row(e, ids.get(e.get("ats_job_id"))) for e in res.events])
         store.insert_near_misses([{"company_id": c["id"], "posting_id": ids.get(n["ats_job_id"]), "title": n["title"],
                                    "best_match": n["best_match"], "score": n["score"], "reason": n["reason"], "observed_at": now}
                                   for n in res.near_misses if ids.get(n["ats_job_id"])])
         store.insert_snapshot(res.snapshot)
 
     # 3. Careers pages, only for companies we cannot read through an ATS.
+    # This is a weak signal. Whatever goes wrong here must never stop the main email.
     for c in companies:
         if c.get("ats_type") or not c.get("careers_url"):
             continue
-        status, h = page_fn(c["careers_url"])
-        prev = store.last_snapshot(c["id"])
-        evs = page_events(c, prev, status, h, now, run_id, baseline)
-        new_events += len(evs)
-        if dry_run:
-            continue
-        store.insert_events(evs)
-        store.insert_snapshot({"company_id": c["id"], "run_id": run_id, "observed_at": now,
-                               "careers_status": status, "careers_hash": h})
+        try:
+            status, h = page_fn(c["careers_url"])
+            prev = store.last_snapshot(c["id"])
+            evs = page_events(c, prev, status, h, now, run_id, baseline)
+            new_events += len(evs)
+            if dry_run:
+                continue
+            store.insert_events([_event_row(e, None) for e in evs])
+            store.insert_snapshot({"company_id": c["id"], "run_id": run_id, "observed_at": now,
+                                   "careers_status": status, "careers_hash": h})
+        except Exception as e:                                   # noqa: BLE001
+            log.warning("Careers page watch failed for %s, carrying on: %s", c["name"], e)
 
     _log_discovery_report(report)
     if dry_run:
@@ -173,6 +176,11 @@ def run_once(store, mailer, to, now=None, discover_fn=discover, adapters=ADAPTER
     store.finish_run(run_id, ok, len(failed), {"notes": notes, "failed": failed, "new_events": new_events, "emailed": emailed}, now)
     _write_state(now, baseline, ok, len(failed), new_events, emailed)
     return {"emailed": emailed, "baseline": baseline, "ok": ok, "failed": failed, "new_events": new_events}
+
+
+def _event_row(event, posting_id):
+    """An event as the job_event table stores it. The engine's own helper key is removed."""
+    return dict({k: v for k, v in event.items() if k != "ats_job_id"}, posting_id=posting_id)
 
 
 def _log_discovery_report(report):
@@ -247,6 +255,12 @@ def _write_state(now, baseline, ok, failed, new_events, emailed):
                                       "emailed": emailed}, indent=2) + "\n", encoding="utf-8")
 
 
+def run_url():
+    """Link to this GitHub run, when running in GitHub Actions."""
+    srv, repo, rid = (os.environ.get(k) for k in ("GITHUB_SERVER_URL", "GITHUB_REPOSITORY", "GITHUB_RUN_ID"))
+    return f"{srv}/{repo}/actions/runs/{rid}" if srv and repo and rid else None
+
+
 def main(argv):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     from .db import SupabaseStore, StoreError
@@ -258,6 +272,7 @@ def main(argv):
         return 2
     dry = "--dry-run" in argv
     to = os.environ.get("NOTIFY_TO", "")
+    mailer = get_mailer()
     try:
         problems = st.check_schema()
         if problems:
@@ -266,14 +281,38 @@ def main(argv):
             log.error("Fix: open the Supabase SQL editor, paste the whole of db/003_upgrade.sql, and run it. "
                       "If the columns show in the table at the bottom but this error stays, open Supabase "
                       "Project Settings, then API, and click Reload schema.")
+            fail = "The database is missing something the engine needs: " + "; ".join(problems)
+            if not dry:
+                send_failure_alert(mailer, to, fail)
             return 3
-        run_once(st, get_mailer(), to, dry_run=dry)
-    except StoreError as e:
-        log.error("Database error: %s", e)
-        if "schema cache" in str(e) or "column" in str(e):
-            log.error("The database is missing a column. Paste db/001_schema.sql into the Supabase SQL editor and run it, then run this again.")
+        run_once(st, mailer, to, dry_run=dry)
+    except Exception as e:                                       # noqa: BLE001
+        # Nothing that goes wrong may be silent. Log it, tell the owner by email, and fail the run.
+        kind = "Database error" if isinstance(e, StoreError) else f"Unexpected error ({type(e).__name__})"
+        log.error("%s: %s", kind, e)
+        if not dry:
+            send_failure_alert(mailer, to, f"{kind}: {e}")
         return 1
     return 0
+
+
+def send_failure_alert(mailer, to, reason, now=None):
+    """Email the owner that a run failed. Never raises: an alert that fails must not hide the real error."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    link = run_url()
+    lines = ["The job signal run failed, so no new alerts were sent this time.", "",
+             f"What went wrong: {reason}", "",
+             "Nothing is lost. New roles and changes are kept and will be in the next email once the run works.", ""]
+    if link:
+        lines.append(f"Details: {link}")
+    lines.append(f"Run time: {now.astimezone(IST).strftime('%d %b %Y, %H:%M IST')}")
+    try:
+        mailer.send(to, "Job signals: the run failed", "\n".join(lines) + "\n", None)
+        log.info("Failure alert email sent.")
+        return True
+    except Exception as e:                                       # noqa: BLE001
+        log.error("Could not send the failure alert either: %s", e)
+        return False
 
 
 if __name__ == "__main__":

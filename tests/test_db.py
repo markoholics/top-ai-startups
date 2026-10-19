@@ -49,5 +49,50 @@ class SchemaCheck(unittest.TestCase):
         self.assertIn("table title_near_miss is missing", problems)
 
 
+class Retries(unittest.TestCase):
+    """_call tries again on timeouts and server hiccups, never on our own mistakes."""
+    def setUp(self):
+        import engine.db as dbmod
+        self.dbmod = dbmod
+        self.real = (dbmod.urllib.request.urlopen, dbmod.time.sleep)
+        self.calls = 0
+        dbmod.time.sleep = lambda s: None
+
+    def tearDown(self):
+        self.dbmod.urllib.request.urlopen, self.dbmod.time.sleep = self.real
+
+    def fake(self, failures, error):
+        class Ok:
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def read(s): return b"[]"
+
+        def urlopen(req, timeout=None):
+            self.calls += 1
+            if self.calls <= failures:
+                raise error() if callable(error) else error
+            return Ok()
+        self.dbmod.urllib.request.urlopen = urlopen
+
+    def test_timeout_then_success(self):
+        self.fake(2, lambda: TimeoutError("The read operation timed out"))
+        self.assertEqual(SupabaseStore()._call("POST", "job_posting", body=[]), [])
+        self.assertEqual(self.calls, 3)
+
+    def test_gives_up_after_the_last_try(self):
+        self.fake(99, lambda: TimeoutError("The read operation timed out"))
+        with self.assertRaises(StoreError):
+            SupabaseStore()._call("POST", "job_posting", body=[])
+        self.assertEqual(self.calls, len(self.dbmod.RETRY_WAITS) + 1)
+
+    def test_client_error_is_not_retried(self):
+        import io
+        import urllib.error
+        self.fake(99, lambda: urllib.error.HTTPError("u", 400, "bad", {}, io.BytesIO(b"nope")))
+        with self.assertRaises(StoreError):
+            SupabaseStore()._call("POST", "job_event", body=[])
+        self.assertEqual(self.calls, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

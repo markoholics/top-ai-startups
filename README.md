@@ -43,8 +43,12 @@ where name = 'Company Name';
 
 `ats_type` is one of `greenhouse`, `lever`, `ashby`, `workable`, `recruitee`. The token is the last part of the board link.
 
+## When a run fails
+Database calls try again up to three times when Supabase is slow or busy. If a run still fails, the engine emails you "Job signals: the run failed" with the reason and a link to the run. Nothing is lost. Unsent events wait for the next working run.
+
 ## Two limits of GitHub Actions
 - **Cron can run late.** GitHub may start a scheduled run several minutes after the set time, and later when GitHub is busy. A run set for 09:00 IST may start at 09:15.
+- **Scheduled runs use the repo's default branch.** Keep the default branch and the code you want to run the same. Check under Settings, Branches.
 - **Scheduled workflows are switched off after 60 days without a commit.** Each run commits `state/last_run.json`, so the repo stays active. If the emails ever stop, press **Run workflow** once and check that the schedule is still listed.
 
 ## Other known limits
