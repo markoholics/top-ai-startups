@@ -74,6 +74,53 @@ class Harness:
                                quiet_status=quiet)
 
 
+class PageWatch(unittest.TestCase):
+    """Companies with no ATS access, watched through their careers page."""
+    def make(self):
+        h = Harness()
+        h.store.co[next(iter(h.store.co))].update(careers_url="https://fixture.example/careers")
+        # Unresolvable Co has a careers page but no readable board.
+        for c in h.store.co.values():
+            if c["name"] == "Unresolvable Co":
+                c["careers_url"] = "https://unresolvable.example/careers"
+        return h
+
+    def run_with_page(self, h, hours, status, digest_hash):
+        return runmod.run_once(h.store, h.mailer, "me@example.com", now=at(hours), discover_fn=h.discover,
+                               adapters={"ashby": h.ats}, page_fn=lambda url: (status, digest_hash), quiet_status=False)
+
+    def test_changed_careers_page_is_saved_and_emailed_as_a_weak_signal(self):
+        h = self.make()
+        self.run_with_page(h, 0, 200, "hash-1")                 # baseline
+        r = self.run_with_page(h, 12, 200, "hash-2")            # the page text changed
+        self.assertTrue(r["emailed"])
+        self.assertEqual([e["event_type"] for e in h.store.events], ["careers_page_changed"])
+        mail = h.mailer.sent[-1]
+        self.assertIn("COMPANIES THAT MOVED WITHOUT A MATCHING ROLE", mail["text"])
+        self.assertIn("Weak signal", mail["text"])
+        self.assertFalse(self.run_with_page(h, 24, 200, "hash-2")["emailed"])     # same page again: nothing new
+
+    def test_page_that_appears_is_a_signal(self):
+        h = self.make()
+        self.run_with_page(h, 0, 404, None)
+        r = self.run_with_page(h, 12, 200, "hash-1")
+        self.assertEqual([e["event_type"] for e in h.store.events], ["careers_page_created"])
+        self.assertTrue(r["emailed"])
+
+    def test_a_failing_page_watch_never_blocks_the_main_email(self):
+        h = self.make()
+        self.run_with_page(h, 0, 200, "hash-1")
+        h.ats.boards["fx"] = BASE + [job(5, "Head of Marketing", "Bengaluru")]
+
+        def boom(url):
+            raise RuntimeError("page watch exploded")
+        with self.assertLogs("jobsignals", level="WARNING"):
+            r = runmod.run_once(h.store, h.mailer, "me@example.com", now=at(12), discover_fn=h.discover,
+                                adapters={"ashby": h.ats}, page_fn=boom, quiet_status=False)
+        self.assertTrue(r["emailed"])
+        self.assertIn("Head of Marketing", h.mailer.sent[-1]["text"])
+
+
 class EndToEnd(unittest.TestCase):
     def setUp(self):
         self.h = Harness()
@@ -236,6 +283,17 @@ class EndToEnd(unittest.TestCase):
         mail = h.mailer.sent[-1]
         self.assertIn("COMPANIES THAT MOVED WITHOUT A MATCHING ROLE", mail["text"])
         self.assertIn("First marketing role posted", mail["text"])
+
+
+class FailureAlert(unittest.TestCase):
+    def test_alert_names_the_reason(self):
+        m = Mailer()
+        self.assertTrue(runmod.send_failure_alert(m, "me@example.com", "Database error: timed out"))
+        self.assertEqual(m.sent[0]["subject"], "Job signals: the run failed")
+        self.assertIn("Database error: timed out", m.sent[0]["text"])
+
+    def test_alert_never_raises_when_mail_is_down(self):
+        self.assertFalse(runmod.send_failure_alert(Mailer(fail=True), "me@example.com", "x"))
 
 
 if __name__ == "__main__":

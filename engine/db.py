@@ -7,11 +7,14 @@ Reads SUPABASE_URL and SUPABASE_SERVICE_KEY from the environment.
 import datetime as dt
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 PAGE = 1000
+TIMEOUT_SECONDS = 90
+RETRY_WAITS = (3, 10, 30)          # seconds before the 2nd, 3rd and 4th try
 
 
 class StoreError(Exception):
@@ -58,16 +61,25 @@ class SupabaseStore:
         if prefer:
             headers["Prefer"] = prefer
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method, headers=headers)
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                raw = r.read()
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "replace")[:300]
-            raise StoreError(f"{method} {path}: HTTP {e.code} {detail}")
-        except (urllib.error.URLError, OSError) as e:
-            raise StoreError(f"{method} {path}: {e}")
-        return json.loads(raw) if raw else None
+        attempts = len(RETRY_WAITS) + 1
+        for attempt in range(attempts):
+            req = urllib.request.Request(url, data=data, method=method, headers=headers)
+            try:
+                with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as r:
+                    raw = r.read()
+                return json.loads(raw) if raw else None
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode("utf-8", "replace")[:300]
+                # A server hiccup is worth another try. A 4xx is our mistake, and trying again cannot help.
+                if e.code in (429, 500, 502, 503, 504) and attempt < attempts - 1:
+                    time.sleep(RETRY_WAITS[attempt])
+                    continue
+                raise StoreError(f"{method} {path}: HTTP {e.code} {detail}")
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                if attempt < attempts - 1:
+                    time.sleep(RETRY_WAITS[attempt])
+                    continue
+                raise StoreError(f"{method} {path}: {e} (tried {attempts} times)")
 
     def select(self, table, params=None):
         out, offset = [], 0
@@ -166,6 +178,8 @@ class SupabaseStore:
 
     # -- events and logs ----------------------------------------------------
     def insert_events(self, rows):
+        # The database has no ats_job_id column. It is the engine's own key, so never send it.
+        rows = [{k: v for k, v in r.items() if k != "ats_job_id"} for r in rows]
         for chunk in self._chunks(rows, 200):
             self._call("POST", "job_event", {"on_conflict": "dedupe_key"},
                        self._uniform([_row_out(r) for r in chunk]), "resolution=ignore-duplicates,return=minimal")
