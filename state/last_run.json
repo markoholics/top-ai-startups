@@ -1,8 +1,8 @@
 {
-  "last_run_at": "2026-10-22T08:47:50.791597+00:00",
+  "last_run_at": "2026-10-23T08:43:25.736523+00:00",
   "kind": "normal",
-  "boards_read": 12,
-  "boards_failed": 0,
-  "new_events": 1,
+  "boards_read": 11,
+  "boards_failed": 1,
+  "new_events": 2,
   "emailed": true
 }
